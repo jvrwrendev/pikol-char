@@ -1,0 +1,1 @@
+{"routes":[{"path":"/","title":"Dashboard"},{"path":"/sessions","title":"Court Sessions"},{"path":"/players","title":"Players"},{"path":"/time-monitoring","title":"Time Monitoring"},{"path":"/payments","title":"Payment Monitoring"},{"path":"/reports","title":"Reports"},{"path":"/settings","title":"Settings"}]}
