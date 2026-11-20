@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { format, startOfDay, startOfWeek, subDays, subWeeks } from 'date-fns'
 import { ArrowRight, CalendarDays, CircleDollarSign, Clock3, Users, WalletCards } from 'lucide-react'
@@ -17,6 +17,22 @@ export function DashboardPage() {
   const { data } = useAppState()
   const [chartRange, setChartRange] = useState<ChartRange>('daily')
   const now = useMemo(() => new Date(), [data])
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const sync = () => setSystemDark(media.matches)
+    sync()
+    media.addEventListener('change', sync)
+    return () => media.removeEventListener('change', sync)
+  }, [])
+
+  const resolvedTheme = (data.settings.theme ?? 'dark') === 'system'
+    ? (systemDark ? 'dark' : 'light')
+    : (data.settings.theme ?? 'dark')
+  const chartColors = resolvedTheme === 'light'
+    ? { grid: '#d8e0e6', tick: '#64748b', cursor: 'rgba(14, 116, 144, 0.08)', bar: '#0e7490', tooltipBg: '#ffffff' }
+    : { grid: '#293438', tick: '#94a3b8', cursor: 'rgba(0, 184, 196, 0.08)', bar: '#00b8c4', tooltipBg: '#111719' }
 
   const sessionSummaries = useMemo(() => data.sessions.map((session) => {
     const links = data.sessionPlayers.filter((item) => item.sessionId === session.id)
@@ -122,16 +138,16 @@ export function DashboardPage() {
           <div className="chart-wrap" role="img" aria-label={`Collections by ${chartRange === 'daily' ? 'day' : 'week'}`}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={chartData} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="#293438" />
-                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 10 }} tickFormatter={(value: number) => `₱${Math.round(value / 100).toLocaleString()}`} width={52} />
+                <CartesianGrid vertical={false} stroke={chartColors.grid} />
+                <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
+                <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} tickFormatter={(value: number) => `₱${Math.round(value / 100).toLocaleString()}`} width={56} />
                 <Tooltip
-                  cursor={{ fill: 'rgba(0, 184, 196, 0.08)' }}
+                  cursor={{ fill: chartColors.cursor }}
                   content={({ active, payload, label }) => active && payload?.length
                     ? <div className="chart-tooltip"><strong>{label}</strong><span>{formatCurrency(Number(payload[0].value ?? 0))}</span></div>
                     : null}
                 />
-                <Bar dataKey="amount" name="Collections" fill="#00b8c4" radius={[3, 3, 0, 0]} maxBarSize={34} />
+                <Bar dataKey="amount" name="Collections" fill={chartColors.bar} radius={[3, 3, 0, 0]} maxBarSize={34} />
               </BarChart>
             </ResponsiveContainer>
           </div>

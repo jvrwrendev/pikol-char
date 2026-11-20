@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, type SubmitHandler } from 'react-hook-form'
 import { ArrowRight, Clock3, Eye, Pencil, Play, UserRoundPlus } from 'lucide-react'
@@ -26,7 +26,6 @@ type SessionFormInput = {
   hourlyRate: number
   notes?: string
 }
-const NEW_COURT = '__new_court__'
 
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : 'The session could not be saved. Please try again.'
@@ -46,12 +45,10 @@ export function SessionsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingSession, setEditingSession] = useState<CourtSession | null>(null)
   const [viewingSession, setViewingSession] = useState<CourtSession | null>(null)
-  const [newCourtName, setNewCourtName] = useState('')
   const form = useForm<SessionFormInput>({
     resolver: zodResolver(sessionFormSchema),
     defaultValues: { sessionDate: '', courtId: '', startTime: '09:00', endTime: defaultEndTime('09:00', data.settings.defaultSessionMinutes), hourlyRate: data.settings.defaultHourlyRateCents / 100, notes: '' },
   })
-  const courtId = form.watch('courtId')
 
   const rows = useMemo(() => data.sessions.map((session) => {
     const links = data.sessionPlayers.filter((player) => player.sessionId === session.id)
@@ -72,11 +69,14 @@ export function SessionsPage() {
   }).sort((a, b) => `${b.session.sessionDate}T${b.session.startTime}`.localeCompare(`${a.session.sessionDate}T${a.session.startTime}`)), [data])
 
   const openCreate = () => {
+    if (data.courts.length === 0) {
+      toast.error('Add a court first before creating a session.')
+      return
+    }
     setEditingSession(null)
-    setNewCourtName('')
     form.reset({
       sessionDate: (() => { const today = new Date(); return new Date(today.getTime() - today.getTimezoneOffset() * 60_000).toISOString().slice(0, 10) })(),
-      courtId: data.courts[0]?.id ?? NEW_COURT,
+      courtId: data.courts[0]?.id ?? '',
       startTime: '09:00',
       endTime: defaultEndTime('09:00', data.settings.defaultSessionMinutes),
       hourlyRate: data.settings.defaultHourlyRateCents / 100,
@@ -91,7 +91,6 @@ export function SessionsPage() {
       return
     }
     setEditingSession(session)
-    setNewCourtName('')
     form.reset({
       sessionDate: session.sessionDate,
       courtId: session.courtId,
@@ -105,19 +104,15 @@ export function SessionsPage() {
 
   const onSubmit: SubmitHandler<SessionFormInput> = (values) => {
     const selectedCourt = data.courts.find((court) => court.id === values.courtId)
-    const courtName = values.courtId === NEW_COURT ? newCourtName.trim() : selectedCourt?.name
-    if (!courtName) {
-      form.setError('courtId', { type: 'manual', message: 'Choose an existing court or enter a new court name.' })
+    if (!selectedCourt) {
+      form.setError('courtId', { type: 'manual', message: 'Select an existing court. Add courts from the Courts page if needed.' })
       return
     }
-    const normalizedCourt = courtName.toLocaleLowerCase()
-    const matchingCourtId = data.courts.find((court) => court.name.trim().toLocaleLowerCase() === normalizedCourt)?.id
-    const candidateCourtId = matchingCourtId ?? values.courtId
     const start = values.startTime
     const end = values.endTime
     const overlap = data.sessions.find((session) => {
       if (session.id === editingSession?.id || session.status === 'cancelled') return false
-      if (session.courtId !== candidateCourtId || session.sessionDate !== values.sessionDate) return false
+      if (session.courtId !== values.courtId || session.sessionDate !== values.sessionDate) return false
       return start < session.endTime && session.startTime < end
     })
     if (overlap) {
@@ -127,7 +122,7 @@ export function SessionsPage() {
 
     try {
       const draft = {
-        courtName,
+        courtName: selectedCourt.name,
         sessionDate: values.sessionDate,
         startTime: values.startTime,
         endTime: values.endTime,
@@ -171,9 +166,13 @@ export function SessionsPage() {
   return <div className="page-content">
     <PageHeader
       title="Court sessions"
-      description="Schedule courts, manage session activity, and review collection progress."
-      action={<Button onClick={openCreate}>Create session</Button>}
+      description="Schedule court sessions, manage activity, and review collection progress."
+      action={<Button onClick={openCreate} disabled={data.courts.length === 0}>Create session</Button>}
     />
+
+    {data.courts.length === 0 && <div className="helper-note" role="status" style={{ marginBottom: 14 }}>
+      No courts are available yet. <Link className="inline-link" to="/courts">Add a court</Link> before creating sessions.
+    </div>}
 
     <div className="summary-grid" aria-label="Session totals">
       <Card className="summary-card"><span>Total sessions</span><strong>{rows.length}</strong></Card>
@@ -228,7 +227,7 @@ export function SessionsPage() {
               </td>
             </tr>
           })}</tbody>
-        </table></div> : <EmptyState title="No court sessions" description="Create your first session to begin organizing court schedules and collections." action={<Button onClick={openCreate}>Create session</Button>} />}
+        </table></div> : <EmptyState title="No court sessions" description="Create your first session to begin organizing court schedules and collections." action={<Button onClick={openCreate} disabled={data.courts.length === 0}>Create session</Button>} />}
       </CardContent>
     </Card>
 
@@ -236,7 +235,7 @@ export function SessionsPage() {
       <DialogContent aria-describedby="session-form-description">
         <DialogHeader>
           <DialogTitle>{editingSession ? 'Edit session' : 'Create court session'}</DialogTitle>
-          <DialogDescription id="session-form-description">Set the court schedule and hourly rental rate. Rent is calculated from the session duration.</DialogDescription>
+          <DialogDescription id="session-form-description">Set the court schedule and hourly rental rate. Rent is calculated from the session duration. Manage court records on the <Link className="inline-link" to="/courts">Courts</Link> page.</DialogDescription>
         </DialogHeader>
         <form onSubmit={form.handleSubmit(onSubmit)} noValidate>
           <div className="form-grid">
@@ -247,17 +246,11 @@ export function SessionsPage() {
             </div>
             <div className="form-field">
               <Label htmlFor="session-court">Court</Label>
-              <Select id="session-court" {...form.register('courtId')}>
+              <Select id="session-court" {...form.register('courtId')} disabled={data.courts.length === 0}>
                 {data.courts.map((court) => <option value={court.id} key={court.id}>{court.name}</option>)}
-                <option value={NEW_COURT}>Add a new court…</option>
               </Select>
               <FieldError>{form.formState.errors.courtId?.message}</FieldError>
             </div>
-            {courtId === NEW_COURT && <div className="form-field full">
-              <Label htmlFor="new-court-name">New court name</Label>
-              <Input id="new-court-name" value={newCourtName} onChange={(event) => setNewCourtName(event.target.value)} placeholder="e.g. Court 3" maxLength={80} />
-              <p className="form-hint">If this name already exists, the existing court record will be used.</p>
-            </div>}
             <div className="form-field">
               <Label htmlFor="session-start">Start time</Label>
               <Input id="session-start" type="time" {...form.register('startTime')} />
@@ -282,7 +275,7 @@ export function SessionsPage() {
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Close</Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>{editingSession ? 'Save changes' : 'Create session'}</Button>
+            <Button type="submit" disabled={form.formState.isSubmitting || data.courts.length === 0}>{editingSession ? 'Save changes' : 'Create session'}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

@@ -17,7 +17,7 @@ const paymentChoices: { value: PaymentMethod; label: string }[] = [
 const defaultSettings: AppSettings = {
   systemName: 'PIKOL CHAR', defaultHourlyRateCents: 20_000, currency: 'PHP', defaultSessionMinutes: 180,
   timeFormat: '12h', dateFormat: 'MMM d, yyyy', paymentMethods: ['cash', 'gcash', 'bank_transfer', 'other'],
-  calculationMethod: 'proportional_player_minutes', roundingRule: 'largest_remainder',
+  calculationMethod: 'proportional_player_minutes', roundingRule: 'largest_remainder', theme: 'dark',
 }
 
 export function SettingsPage() {
@@ -86,6 +86,7 @@ export function SettingsPage() {
               <div className="form-field"><Label htmlFor="session-duration">Default session duration (minutes)</Label><Input id="session-duration" type="number" min="1" max="899" step="1" required value={settings.defaultSessionMinutes} onChange={(event) => update('defaultSessionMinutes', Math.min(899, Math.max(1, Math.trunc(Number(event.target.value) || 1)) ))} /><p className="form-hint">From 1 to 899 minutes so a new 09:00 session ends before midnight.</p></div>
               <div className="form-field"><Label htmlFor="time-format">Time display</Label><Select id="time-format" value={settings.timeFormat} onChange={(event) => update('timeFormat', event.target.value as AppSettings['timeFormat'])}><option value="12h">12-hour</option><option value="24h">24-hour</option></Select></div>
               <div className="form-field"><Label htmlFor="date-format">Date display</Label><Select id="date-format" value={settings.dateFormat} onChange={(event) => update('dateFormat', event.target.value as AppSettings['dateFormat'])}><option value="MMM d, yyyy">MMM d, yyyy</option><option value="dd/MM/yyyy">dd/MM/yyyy</option><option value="yyyy-MM-dd">yyyy-MM-dd</option></Select></div>
+              <div className="form-field full"><Label htmlFor="theme">Appearance</Label><Select id="theme" value={settings.theme ?? 'dark'} onChange={(event) => update('theme', event.target.value as AppSettings['theme'])}><option value="dark">Dark</option><option value="light">Light</option><option value="system">System</option></Select><p className="form-hint">Choose the interface theme for this browser workspace.</p></div>
             </div>
           </CardContent>
         </Card>

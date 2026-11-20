@@ -1,7 +1,7 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu'
 import { format } from 'date-fns'
-import { Bell, CalendarDays, ChevronDown, CircleUserRound, FileText, LayoutDashboard, Menu, Settings2, Timer, Users, WalletCards, X } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Bell, CalendarDays, ChevronDown, CircleUserRound, FileText, LayoutDashboard, MapPin, Menu, Moon, Settings2, Sun, Timer, Users, WalletCards, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import logo from '@/assets/logo.jpg'
 import { useAppState } from '@/app/AppState'
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 
 const items = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/courts', label: 'Courts', icon: MapPin },
   { to: '/sessions', label: 'Court Sessions', icon: CalendarDays },
   { to: '/players', label: 'Players', icon: Users },
   { to: '/time-monitoring', label: 'Time Monitoring', icon: Timer },
@@ -43,8 +44,9 @@ function Sidebar({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?
 
 export function AppShell() {
   const location = useLocation()
-  const { data, persistenceError } = useAppState()
+  const { data, persistenceError, saveSettings } = useAppState()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const now = useIntervalTick(60_000)
   const title = items.find((item) => item.to === location.pathname)?.label ?? 'Dashboard'
   const activeSession = data.sessions.find((session) => session.status === 'active')
@@ -54,6 +56,22 @@ export function AppShell() {
     return links.filter((link) => data.timeLogs.some((log) => log.sessionPlayerId === link.id && !log.timeOut)).length
   }, [activeSession, data.sessionPlayers, data.timeLogs])
 
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
+    const sync = () => setSystemDark(media.matches)
+    sync()
+    media.addEventListener('change', sync)
+    return () => media.removeEventListener('change', sync)
+  }, [])
+
+  const resolvedTheme = (data.settings.theme ?? 'dark') === 'system'
+    ? (systemDark ? 'dark' : 'light')
+    : (data.settings.theme ?? 'dark')
+
+  const toggleTheme = () => {
+    saveSettings({ ...data.settings, theme: resolvedTheme === 'dark' ? 'light' : 'dark' })
+  }
+
   return <div className="app-shell">
     <aside className="app-sidebar"><Sidebar /></aside>
     <div className="app-main">
@@ -61,6 +79,9 @@ export function AppShell() {
         <Button variant="ghost" size="icon" className="mobile-menu-button" aria-label="Open navigation" onClick={() => setDrawerOpen(true)}><Menu size={19} /></Button>
         <div className="header-title"><strong>{title}</strong><span>{format(now, 'EEEE, MMM d, yyyy')}</span></div>
         <div className="header-actions">
+          <Button variant="ghost" size="icon" aria-label={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} title={resolvedTheme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'} onClick={toggleTheme}>
+            {resolvedTheme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+          </Button>
           <DropdownMenu.Root>
             <DropdownMenu.Trigger className="icon-button header-notice" aria-label="Open notifications">
               <Bell size={18} />{activePlayers > 0 && <span className="notification-dot" />}

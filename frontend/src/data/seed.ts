@@ -124,7 +124,7 @@ export function createSeedData(): AppData {
   })
 
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     courts,
     sessions: [activeSession, scheduledSession, historicalSession],
     players,
@@ -135,7 +135,7 @@ export function createSeedData(): AppData {
     settings: {
       systemName: 'PIKOL CHAR', defaultHourlyRateCents: 20_000, currency: 'PHP', defaultSessionMinutes: 180,
       timeFormat: '12h', dateFormat: 'MMM d, yyyy', paymentMethods: ['cash', 'gcash', 'bank_transfer', 'other'],
-      calculationMethod: 'proportional_player_minutes', roundingRule: 'largest_remainder',
+      calculationMethod: 'proportional_player_minutes', roundingRule: 'largest_remainder', theme: 'dark',
     },
   }
 }

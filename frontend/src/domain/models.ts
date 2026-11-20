@@ -72,6 +72,8 @@ export interface LiquidationReport {
   finalizedAt: string
 }
 
+export type ThemePreference = 'dark' | 'light' | 'system'
+
 export interface AppSettings {
   systemName: string
   defaultHourlyRateCents: number
@@ -82,10 +84,11 @@ export interface AppSettings {
   paymentMethods: PaymentMethod[]
   calculationMethod: 'proportional_player_minutes'
   roundingRule: 'largest_remainder'
+  theme: ThemePreference
 }
 
 export interface AppData {
-  schemaVersion: 2
+  schemaVersion: 3
   courts: Court[]
   sessions: CourtSession[]
   players: Player[]

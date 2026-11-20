@@ -61,6 +61,7 @@ interface AddPlayerDraft {
 interface AppStateValue {
   data: AppData
   persistenceError: string | null
+  addCourt: (draft: { name: string; hourlyRateCents: number; status: 'available' | 'maintenance' }) => string
   addSession: (draft: SessionDraft) => string
   editSession: (sessionId: string, changes: Partial<SessionDraft>) => void
   setSessionStatus: (sessionId: string, status: SessionStatus) => void
@@ -87,6 +88,25 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   dataRef.current = data
 
   useEffect(() => {
+    const root = document.documentElement
+    const theme = data.settings.theme ?? 'dark'
+    const apply = (resolved: 'dark' | 'light') => {
+      root.dataset.theme = resolved
+      root.style.colorScheme = resolved
+    }
+
+    if (theme === 'system') {
+      const media = window.matchMedia('(prefers-color-scheme: dark)')
+      const sync = () => apply(media.matches ? 'dark' : 'light')
+      sync()
+      media.addEventListener('change', sync)
+      return () => media.removeEventListener('change', sync)
+    }
+
+    apply(theme)
+  }, [data.settings.theme])
+
+  useEffect(() => {
     try {
       saveAppData(data)
       setPersistenceError(null)
@@ -111,6 +131,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     return {
       data,
       persistenceError,
+      addCourt(draft) {
+        let createdId = ''
+        update((current) => {
+          const name = draft.name.trim()
+          if (!name) throw new Error('Enter a court name.')
+          const duplicate = current.courts.some((court) => court.name.trim().toLowerCase() === name.toLowerCase())
+          if (duplicate) throw new Error('A court with this name already exists.')
+          const hourlyRateCents = Math.max(0, Math.trunc(draft.hourlyRateCents))
+          if (!Number.isSafeInteger(hourlyRateCents) || hourlyRateCents <= 0) throw new Error('Enter an hourly rate greater than zero.')
+          const court = { id: makeId('court'), name, hourlyRateCents, status: draft.status }
+          createdId = court.id
+          return { ...current, courts: [...current.courts, court] }
+        })
+        return createdId
+      },
       addSession(draft) {
         let createdId = ''
         update((current) => {
