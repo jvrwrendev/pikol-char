@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm, type SubmitHandler } from 'react-hook-form'
@@ -49,22 +49,34 @@ export function SessionsPage() {
     resolver: zodResolver(sessionFormSchema),
     defaultValues: { sessionDate: '', courtId: '', startTime: '09:00', endTime: defaultEndTime('09:00', data.settings.defaultSessionMinutes), hourlyRate: data.settings.defaultHourlyRateCents / 100, notes: '' },
   })
+  const selectedCourtId = form.watch('courtId')
+
+  useEffect(() => {
+    if (!dialogOpen || editingSession) return
+    const court = data.courts.find((item) => item.id === selectedCourtId)
+    if (court) form.setValue('hourlyRate', court.hourlyRateCents / 100, { shouldValidate: true })
+  }, [data.courts, dialogOpen, editingSession, form, selectedCourtId])
 
   const rows = useMemo(() => data.sessions.map((session) => {
     const links = data.sessionPlayers.filter((player) => player.sessionId === session.id)
     const linkedIds = new Set(links.map((player) => player.id))
+    const sessionLogs = data.timeLogs.filter((log) => linkedIds.has(log.sessionPlayerId))
     const summary = buildCollectionSummary(
       session,
       links,
-      data.timeLogs.filter((log) => linkedIds.has(log.sessionPlayerId)),
+      sessionLogs,
       data.payments.filter((payment) => linkedIds.has(payment.sessionPlayerId)),
     )
+    const checkedInCount = links.filter((link) => sessionLogs.some((log) => log.sessionPlayerId === link.id)).length
+    const currentlyPlayingCount = links.filter((link) => sessionLogs.some((log) => log.sessionPlayerId === link.id && !log.timeOut)).length
     return {
       session,
       links,
       summary,
       courtName: data.courts.find((court) => court.id === session.courtId)?.name ?? 'Court unavailable',
       duration: sessionDurationMinutes(session.startTime, session.endTime),
+      checkedInCount,
+      currentlyPlayingCount,
     }
   }).sort((a, b) => `${b.session.sessionDate}T${b.session.startTime}`.localeCompare(`${a.session.sessionDate}T${a.session.startTime}`)), [data])
 
@@ -73,13 +85,14 @@ export function SessionsPage() {
       toast.error('Add a court first before creating a session.')
       return
     }
+    const defaultCourt = data.courts[0]
     setEditingSession(null)
     form.reset({
       sessionDate: (() => { const today = new Date(); return new Date(today.getTime() - today.getTimezoneOffset() * 60_000).toISOString().slice(0, 10) })(),
-      courtId: data.courts[0]?.id ?? '',
+      courtId: defaultCourt?.id ?? '',
       startTime: '09:00',
       endTime: defaultEndTime('09:00', data.settings.defaultSessionMinutes),
-      hourlyRate: data.settings.defaultHourlyRateCents / 100,
+      hourlyRate: (defaultCourt?.hourlyRateCents ?? data.settings.defaultHourlyRateCents) / 100,
       notes: '',
     })
     setDialogOpen(true)
@@ -122,7 +135,7 @@ export function SessionsPage() {
 
     try {
       const draft = {
-        courtName: selectedCourt.name,
+        courtId: selectedCourt.id,
         sessionDate: values.sessionDate,
         startTime: values.startTime,
         endTime: values.endTime,
@@ -188,7 +201,7 @@ export function SessionsPage() {
           <thead><tr>
             <th className="table-th">Date / court</th><th className="table-th">Schedule</th><th className="table-th">Duration</th><th className="table-th">Rate / hr</th><th className="table-th">Rent</th><th className="table-th">Players</th><th className="table-th">Session</th><th className="table-th">Collection</th><th className="table-th">Actions</th>
           </tr></thead>
-          <tbody>{rows.map(({ session, links, summary, courtName, duration }) => {
+          <tbody>{rows.map(({ session, links, summary, courtName, duration, checkedInCount, currentlyPlayingCount }) => {
             const collectionStatus = summary.totalAmountDueCents <= 0 ? 'not_charged' : summary.outstandingBalanceCents <= 0 ? 'paid' : summary.totalCollectedCents > 0 ? 'partially_paid' : 'unpaid'
             const highlighted = filterId === session.id
             return <tr key={session.id} className={highlighted ? 'row-highlight' : undefined}>
@@ -197,7 +210,7 @@ export function SessionsPage() {
               <td className="table-td">{formatDuration(duration)}</td>
               <td className="table-td">{formatCurrency(session.hourlyRateCents)}</td>
               <td className="table-td"><span className="table-primary">{formatCurrency(summary.totalRentalCents)}</span><span className="table-secondary">due {formatCurrency(summary.totalAmountDueCents)}</span></td>
-              <td className="table-td">{links.length}</td>
+              <td className="table-td"><span className="table-primary">{checkedInCount}</span><span className="table-secondary">{currentlyPlayingCount} playing{links.length !== checkedInCount ? ` · ${links.length} registered` : ''}</span></td>
               <td className="table-td"><StatusBadge status={session.status} />{session.finalizedAt && <span className="table-secondary">Finalized</span>}</td>
               <td className="table-td"><StatusBadge status={collectionStatus} /><span className="table-secondary">{formatCurrency(summary.totalCollectedCents)} collected</span></td>
               <td className="table-td">
@@ -301,7 +314,9 @@ export function SessionsPage() {
             <DetailRow label="Amount allocated" value={formatCurrency(selectedView.summary.totalAmountDueCents)} />
             <DetailRow label="Collected" value={formatCurrency(selectedView.summary.totalCollectedCents)} />
             <DetailRow label="Outstanding" value={formatCurrency(selectedView.summary.outstandingBalanceCents)} />
-            <DetailRow label="Registered players" value={String(selectedView.links.length)} />
+            <DetailRow label="Checked-in players" value={String(selectedView.checkedInCount)} />
+            <DetailRow label="Currently playing" value={String(selectedView.currentlyPlayingCount)} />
+            <DetailRow label="Session registrations" value={String(selectedView.links.length)} />
           </div>
           {selectedView.session.notes && <p className="helper-note" style={{ marginTop: 12 }}>{selectedView.session.notes}</p>}
           <DialogFooter>

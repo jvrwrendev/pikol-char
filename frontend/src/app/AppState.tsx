@@ -45,7 +45,7 @@ function upsertReportSnapshot(data: AppData, sessionId: string): LiquidationRepo
 }
 
 interface SessionDraft {
-  courtName: string
+  courtId: string
   sessionDate: string
   startTime: string
   endTime: string
@@ -58,6 +58,14 @@ interface AddPlayerDraft {
   contactNumber?: string
   notes?: string
 }
+interface ScanCheckInResult {
+  sessionPlayerId: string
+  playerId: string
+  playerName: string
+  action: 'time_in' | 'time_out'
+  registeredNow: boolean
+}
+
 interface AppStateValue {
   data: AppData
   persistenceError: string | null
@@ -71,6 +79,7 @@ interface AppStateValue {
   removePlayerFromSession: (sessionPlayerId: string) => void
   timeIn: (sessionPlayerId: string) => string
   timeOut: (sessionPlayerId: string) => void
+  confirmPlayerScan: (sessionId: string, playerId: string) => ScanCheckInResult
   editTimeLog: (logId: string, timeIn: string, timeOut: string | null) => void
   recordPayment: (sessionPlayerId: string, amountCents: number, method: PaymentMethod, notes: string) => void
   recordAdjustment: (sessionPlayerId: string, amountCents: number, method: PaymentMethod, reason: string) => void
@@ -149,22 +158,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       addSession(draft) {
         let createdId = ''
         update((current) => {
-          const name = draft.courtName.trim()
-          if (!name) throw new Error('Enter a court name.')
-          let court = current.courts.find((item) => item.name.toLowerCase() === name.toLowerCase())
-          const courts = court ? current.courts : [...current.courts, court = {
-            id: makeId('court'), name, hourlyRateCents: draft.hourlyRateCents, status: 'available',
-          }]
+          const court = current.courts.find((item) => item.id === draft.courtId)
+          if (!court) throw new Error('Select an existing court before creating a session.')
           const session: CourtSession = {
             id: makeId('session'), courtId: court.id, sessionDate: draft.sessionDate,
             startTime: draft.startTime, endTime: draft.endTime,
             hourlyRateCents: Math.max(0, Math.trunc(draft.hourlyRateCents)), status: 'scheduled',
             notes: draft.notes.trim(), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), finalizedAt: null,
           }
-          const conflict = checkCourtConflict({ ...current, courts }, session)
+          const conflict = checkCourtConflict(current, session)
           if (conflict) throw new Error(conflict)
           createdId = session.id
-          return { ...current, courts, sessions: [session, ...current.sessions] }
+          return { ...current, sessions: [session, ...current.sessions] }
         })
         return createdId
       },
@@ -173,30 +178,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           const old = current.sessions.find((session) => session.id === sessionId)
           if (!old) throw new Error('Session not found.')
           if (old.finalizedAt) throw new Error('Finalized sessions are locked. Use an authorized adjustment instead.')
-          let courtId = old.courtId
-          let courts = current.courts
-          if (changes.courtName !== undefined) {
-            const name = changes.courtName.trim()
-            if (!name) throw new Error('Enter a court name.')
-            let court = courts.find((item) => item.name.toLowerCase() === name.toLowerCase())
-            if (!court) {
-              court = { id: makeId('court'), name, hourlyRateCents: old.hourlyRateCents, status: 'available' }
-              courts = [...courts, court]
-            }
-            courtId = court.id
-          }
+          const courtId = changes.courtId ?? old.courtId
+          const court = current.courts.find((item) => item.id === courtId)
+          if (!court) throw new Error('Select an existing court before updating this session.')
           const session: CourtSession = {
             ...old,
+            courtId,
             ...(changes.sessionDate !== undefined ? { sessionDate: changes.sessionDate } : {}),
             ...(changes.startTime !== undefined ? { startTime: changes.startTime } : {}),
             ...(changes.endTime !== undefined ? { endTime: changes.endTime } : {}),
             ...(changes.hourlyRateCents !== undefined ? { hourlyRateCents: Math.max(0, Math.trunc(changes.hourlyRateCents)) } : {}),
             ...(changes.notes !== undefined ? { notes: changes.notes.trim() } : {}),
-            courtId, updatedAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           }
-          const conflict = checkCourtConflict({ ...current, courts }, session)
+          const conflict = checkCourtConflict(current, session)
           if (conflict) throw new Error(conflict)
-          return { ...current, courts, sessions: current.sessions.map((item) => item.id === sessionId ? session : item) }
+          return { ...current, sessions: current.sessions.map((item) => item.id === sessionId ? session : item) }
         })
       },
       setSessionStatus(sessionId, status) {
@@ -326,6 +323,81 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           return { ...current, timeLogs: current.timeLogs.map((item) => item.id === active.id
             ? { ...candidate, durationMinutes: intervalDurationMinutes(candidate.timeIn, candidate.timeOut) } : item) }
         })
+      },
+      confirmPlayerScan(sessionId, playerId) {
+        const now = new Date()
+        let result: ScanCheckInResult | null = null
+        update((current) => {
+          const session = current.sessions.find((item) => item.id === sessionId)
+          if (!session) throw new Error('Session not found.')
+          if (session.finalizedAt) throw new Error('This session is finalized. Time records are locked.')
+          if (session.status !== 'active') throw new Error('Set the session to Active before recording QR check-ins.')
+
+          const player = current.players.find((item) => item.id === playerId)
+          if (!player) throw new Error('Scanned player was not found. Generate and scan a valid player QR code.')
+
+          let sessionPlayer = current.sessionPlayers.find((item) => item.sessionId === sessionId && item.playerId === playerId)
+          let sessionPlayers = current.sessionPlayers
+          let registeredNow = false
+          if (!sessionPlayer) {
+            sessionPlayer = {
+              id: makeId('session-player'),
+              sessionId,
+              playerId,
+              notes: '',
+              createdAt: new Date().toISOString(),
+            }
+            sessionPlayers = [...current.sessionPlayers, sessionPlayer]
+            registeredNow = true
+          }
+
+          const playerLogs = current.timeLogs.filter((item) => item.sessionPlayerId === sessionPlayer!.id)
+          const activeLog = playerLogs.find((item) => !item.timeOut)
+
+          if (activeLog) {
+            const scheduledEnd = new Date(`${session.sessionDate}T${session.endTime}:00`)
+            if (!Number.isFinite(scheduledEnd.getTime())) throw new Error('The session end time is invalid.')
+            const timeOutAt = new Date(Math.min(now.getTime(), scheduledEnd.getTime()))
+            if (timeOutAt.getTime() <= new Date(activeLog.timeIn).getTime()) throw new Error('This player’s Time In is not before the session end.')
+            const candidate = { ...activeLog, timeOut: timeOutAt.toISOString() }
+            const error = validateTimeLog(candidate, session, playerLogs, activeLog.id)
+            if (error) throw new Error(error)
+            result = {
+              sessionPlayerId: sessionPlayer.id,
+              playerId,
+              playerName: player.name,
+              action: 'time_out',
+              registeredNow,
+            }
+            return {
+              ...current,
+              sessionPlayers,
+              timeLogs: current.timeLogs.map((item) => item.id === activeLog.id
+                ? { ...candidate, durationMinutes: intervalDurationMinutes(candidate.timeIn, candidate.timeOut) }
+                : item),
+            }
+          }
+
+          const log: PlayerTimeLog = {
+            id: makeId('time'),
+            sessionPlayerId: sessionPlayer.id,
+            timeIn: now.toISOString(),
+            timeOut: null,
+            durationMinutes: 0,
+          }
+          const error = validateTimeLog(log, session, playerLogs)
+          if (error) throw new Error(error)
+          result = {
+            sessionPlayerId: sessionPlayer.id,
+            playerId,
+            playerName: player.name,
+            action: 'time_in',
+            registeredNow,
+          }
+          return { ...current, sessionPlayers, timeLogs: [...current.timeLogs, log] }
+        })
+        if (!result) throw new Error('The scan could not be completed.')
+        return result
       },
       editTimeLog(logId, timeIn, timeOut) {
         update((current) => {

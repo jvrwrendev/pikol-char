@@ -93,11 +93,18 @@ export function DashboardPage() {
     return buckets
   }, [chartRange, data.payments])
 
-  const activeSummary = activeSessions.reduce((sum, item) => ({
-    players: sum.players + item.players.length,
-    rent: sum.rent + item.summary.totalRentalCents,
-    collected: sum.collected + item.summary.totalCollectedCents,
-  }), { players: 0, rent: 0, collected: 0 })
+  const activeSummary = activeSessions.reduce((sum, item) => {
+    const playerIds = new Set(item.players.map((player) => player.id))
+    const logs = data.timeLogs.filter((log) => playerIds.has(log.sessionPlayerId))
+    const playing = item.players.filter((link) => logs.some((log) => log.sessionPlayerId === link.id && !log.timeOut)).length
+    const checkedIn = item.players.filter((link) => logs.some((log) => log.sessionPlayerId === link.id)).length
+    return {
+      players: sum.players + checkedIn,
+      playing: sum.playing + playing,
+      rent: sum.rent + item.summary.totalRentalCents,
+      collected: sum.collected + item.summary.totalCollectedCents,
+    }
+  }, { players: 0, playing: 0, rent: 0, collected: 0 })
 
   const stats = [
     { label: 'Total court sessions', value: data.sessions.length.toLocaleString(), note: 'All recorded sessions', icon: CalendarDays },
@@ -160,9 +167,9 @@ export function DashboardPage() {
         <CardContent>
           {activeSessions.length ? <>
             <div className="session-summary" aria-label="Active session totals">
-              <div className="session-summary-item"><span>Players</span><strong>{activeSummary.players}</strong></div>
+              <div className="session-summary-item"><span>Checked in</span><strong>{activeSummary.players}</strong></div>
               <span className="session-summary-divider" />
-              <div className="session-summary-item"><span>Scheduled rent</span><strong>{formatCurrency(activeSummary.rent)}</strong></div>
+              <div className="session-summary-item"><span>Currently playing</span><strong>{activeSummary.playing}</strong></div>
               <span className="session-summary-divider" />
               <div className="session-summary-item"><span>Collected</span><strong>{formatCurrency(activeSummary.collected)}</strong></div>
             </div>

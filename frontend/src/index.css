@@ -629,3 +629,112 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   .monitor-scan-item { flex-direction: column; align-items: stretch; }
   .monitor-scan-item .inline-actions { justify-content: flex-end; flex-wrap: wrap; }
 }
+
+
+/* Time Monitoring finance/notes additions */
+.monitor-note-cell {
+  display: inline-block;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  color: var(--text-secondary);
+}
+.monitor-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.monitor-detail-card {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+.monitor-detail-value { margin-top: 4px; }
+.monitor-detail-notes {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-description);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@media (min-width: 1400px) {
+  .monitor-overview { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .monitor-detail-grid { grid-template-columns: 1fr; }
+  .monitor-note-cell { max-width: 140px; }
+}
+
+
+/* QR scan confirmation */
+.monitor-confirm-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-card);
+}
+.monitor-confirm-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.monitor-confirm-main strong { color: var(--text-primary); font-size: var(--font-size-body); }
+
+
+/* Player QR dialogs */
+.qr-dialog-body { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 8px 0; }
+.qr-code-frame {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 14px; border: 1px solid var(--border); border-radius: 10px;
+  background: #ffffff; color: #0f172a;
+}
+.qr-code-frame.small { padding: 10px; border-radius: 8px; }
+.qr-meta { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; min-width: 0; }
+.qr-meta strong { color: var(--text-primary); font-size: var(--font-size-body); }
+.qr-code-value { font-size: var(--font-size-helper); color: var(--text-secondary); word-break: break-all; }
+.qr-list-dialog { width: min(860px, calc(100vw - 28px)); }
+.qr-player-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px; max-height: 52vh; overflow: auto; padding: 4px 2px;
+}
+.qr-player-card {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  padding: 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-secondary);
+}
+.qr-player-card .qr-meta { gap: 2px; }
+.qr-player-card .qr-code-value { display: none; }
+
+
+/* Clickable notes in time monitoring */
+button.monitor-note-cell.monitor-note-button {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+}
+button.monitor-note-cell.monitor-note-button:hover .row-subtle,
+button.monitor-note-cell.monitor-note-button:hover {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--border-hover, var(--border));
+  text-underline-offset: 2px;
+}
+button.monitor-note-cell.monitor-note-button:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--accent));
+  outline-offset: 2px;
+  border-radius: 4px;
+}
