@@ -1,21 +1,16 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { AppShell } from '@/components/layout/AppShell'
 import { useAppState } from '@/app/AppState'
-
-const DashboardPage = lazy(() => import('@/features/dashboard/DashboardPage').then((module) => ({ default: module.DashboardPage })))
-const CourtsPage = lazy(() => import('@/features/courts/CourtsPage').then((module) => ({ default: module.CourtsPage })))
-const SessionsPage = lazy(() => import('@/features/sessions/SessionsPage').then((module) => ({ default: module.SessionsPage })))
-const PlayersPage = lazy(() => import('@/features/players/PlayersPage').then((module) => ({ default: module.PlayersPage })))
-const TimeMonitoringPage = lazy(() => import('@/features/time-monitoring/TimeMonitoringPage').then((module) => ({ default: module.TimeMonitoringPage })))
-const PaymentsPage = lazy(() => import('@/features/payments/PaymentsPage').then((module) => ({ default: module.PaymentsPage })))
-const ReportsPage = lazy(() => import('@/features/reports/ReportsPage').then((module) => ({ default: module.ReportsPage })))
-const SettingsPage = lazy(() => import('@/features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })))
-
-function RouteLoading() {
-  return <div className="route-loading" role="status"><span className="skeleton" />Loading workspace…</div>
-}
+import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { CourtsPage } from '@/features/courts/CourtsPage'
+import { SessionsPage } from '@/features/sessions/SessionsPage'
+import { PlayersPage } from '@/features/players/PlayersPage'
+import { TimeMonitoringPage } from '@/features/time-monitoring/TimeMonitoringPage'
+import { PaymentsPage } from '@/features/payments/PaymentsPage'
+import { ReportsPage } from '@/features/reports/ReportsPage'
+import { SettingsPage } from '@/features/settings/SettingsPage'
 
 export function App() {
   const { data } = useAppState()
@@ -34,19 +29,17 @@ export function App() {
     : (data.settings.theme ?? 'dark')
 
   return <BrowserRouter>
-    <Suspense fallback={<RouteLoading />}>
-      <Routes><Route element={<AppShell />}>
-        <Route index element={<DashboardPage />} />
-        <Route path="courts" element={<CourtsPage />} />
-        <Route path="sessions" element={<SessionsPage />} />
-        <Route path="players" element={<PlayersPage />} />
-        <Route path="time-monitoring" element={<TimeMonitoringPage />} />
-        <Route path="payments" element={<PaymentsPage />} />
-        <Route path="reports" element={<ReportsPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Route></Routes>
-    </Suspense>
+    <Routes><Route element={<AppShell />}>
+      <Route index element={<DashboardPage />} />
+      <Route path="courts" element={<CourtsPage />} />
+      <Route path="sessions" element={<SessionsPage />} />
+      <Route path="players" element={<PlayersPage />} />
+      <Route path="time-monitoring" element={<TimeMonitoringPage />} />
+      <Route path="payments" element={<PaymentsPage />} />
+      <Route path="reports" element={<ReportsPage />} />
+      <Route path="settings" element={<SettingsPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Route></Routes>
     <Toaster position="bottom-right" closeButton duration={3500} theme={resolvedTheme} />
   </BrowserRouter>
 }
